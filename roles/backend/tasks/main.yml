@@ -1,0 +1,51 @@
+- name: Disable Default Version of NodeJS
+  ansible.builtin.shell: dnf module disable nodejs -y
+
+- name: Enable NodeJS18 Version
+  ansible.builtin.shell: dnf module enable nodejs:18 -y
+
+- name: Install NodeJS
+  ansible.builtin.dnf:
+    name: nodejs
+    state: installed
+
+- name: Configure Backend Service
+  ansible.builtin.template:
+    src: backend.service
+    dest: /etc/systemd/system/backend.service
+
+- name: Adding Application User
+  ansible.builtin.user:
+    name: expense
+
+- name: App Pre-Requisites
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: app_prereq
+
+- name: Download Dependencies
+  community.general.npm:
+    path: /app
+
+- name: Reloading SystemD and Start Backend Service
+  ansible.builtin.systemd_service:
+    name: backend
+    state: restarted
+    enabled: yes
+
+- name: Install MySQL & Python Library for MySQL
+  ansible.builtin.dnf:
+    name: "{{item}}"
+    state: installed
+  loop:
+    - mysql
+    - python3-PyMySQL
+
+- name: Load Schema
+  community.mysql.mysql_db:
+    state: import
+    name: all
+    target: /app/schema/backend.sql
+    login_user: root
+    login_password: "{{ lookup('amazon.aws.aws_ssm', 'dev.mysql.root_password', region='us-east-1' ) }}"
+    login_host: mysql-dev.devopsproskills.online
